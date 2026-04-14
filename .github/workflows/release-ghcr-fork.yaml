@@ -50,7 +50,7 @@ jobs:
           platforms: linux/amd64
           push: true
           tags: |
-            ${{ env.IMAGE }}:latest
+            ${{ env.IMAGE }}:v0.23.0
             ${{ env.IMAGE }}:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
