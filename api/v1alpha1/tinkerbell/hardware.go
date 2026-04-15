@@ -363,10 +363,10 @@ type MetadataInstanceNetworkInterfaces struct {
 // "set to empty string" (served as 200 with empty body). Slice fields use
 // nil vs non-nil for the same distinction.
 type MetadataInstanceNetworkInterface struct {
-	DeviceNumber         *int64   `json:"device-number,omitempty"`
-	InterfaceID          *string  `json:"interface-id,omitempty"`
-	LocalHostname        *string  `json:"local-hostname,omitempty"`
-	LocalIPv4s           []string `json:"local-ipv4s,omitempty"`
+	DeviceNumber  *int64   `json:"device-number,omitempty"`
+	InterfaceID   *string  `json:"interface-id,omitempty"`
+	LocalHostname *string  `json:"local-hostname,omitempty"`
+	LocalIPv4s    []string `json:"local-ipv4s,omitempty"`
 	// Mac is the value served at .../{mac}/mac. Deliberately not auto-derived
 	// from the map key: if unset, the IMDS handler returns 404 for that leaf.
 	Mac                  *string  `json:"mac,omitempty"`
