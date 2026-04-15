@@ -101,13 +101,13 @@ type MetadataInstanceNetworkInterfaces struct {
 
 type MetadataInstanceNetworkInterface struct {
 	DeviceNumber         *int64   `json:"device-number,omitempty"`
-	InterfaceID          string   `json:"interface-id,omitempty"`
-	LocalHostname        string   `json:"local-hostname,omitempty"`
+	InterfaceID          *string  `json:"interface-id,omitempty"`
+	LocalHostname        *string  `json:"local-hostname,omitempty"`
 	LocalIPv4s           []string `json:"local-ipv4s,omitempty"`
-	Mac                  string   `json:"mac,omitempty"`
-	PublicHostname       string   `json:"public-hostname,omitempty"`
+	Mac                  *string  `json:"mac,omitempty"`
+	PublicHostname       *string  `json:"public-hostname,omitempty"`
 	PublicIPv4s          []string `json:"public-ipv4s,omitempty"`
-	SubnetIPv4CidrBlock  string   `json:"subnet-ipv4-cidr-block,omitempty"`
+	SubnetIPv4CidrBlock  *string  `json:"subnet-ipv4-cidr-block,omitempty"`
 	VpcIPv4CidrBlocks    []string `json:"vpc-ipv4-cidr-blocks,omitempty"`
 	IPv6s                []string `json:"ipv6s,omitempty"`
 	SubnetIPv6CidrBlocks []string `json:"subnet-ipv6-cidr-blocks,omitempty"`
@@ -115,7 +115,7 @@ type MetadataInstanceNetworkInterface struct {
 }
 ```
 
-Rationale for `*int64` on `DeviceNumber`: distinguishes "not set" from "set to 0" so IMDS correctly 404s the leaf when unset. Other scalar string/slice fields use zero-value-as-unset (empty string / nil slice).
+Rationale for pointer scalars: distinguishes "not set" (→ 404) from "set to empty/zero" (→ 200 with empty body). Slice fields use `nil` vs non-nil (empty slice still counts as set if the operator explicitly provided it).
 
 **Step 3: Run DeepCopy regen — needed because these are CRD types**
 
@@ -212,16 +212,17 @@ type Network struct {
 }
 
 // NetworkInterface holds the per-NIC fields served under
-// /meta-data/network/interfaces/macs/{mac}/.
+// /meta-data/network/interfaces/macs/{mac}/. Scalar pointers distinguish
+// "not set" (→ 404) from "set to empty string" (→ 200 with empty body).
 type NetworkInterface struct {
 	DeviceNumber         *int64
-	InterfaceID          string
-	LocalHostname        string
+	InterfaceID          *string
+	LocalHostname        *string
 	LocalIPv4s           []string
-	Mac                  string
-	PublicHostname       string
+	Mac                  *string
+	PublicHostname       *string
 	PublicIPv4s          []string
-	SubnetIPv4CidrBlock  string
+	SubnetIPv4CidrBlock  *string
 	VpcIPv4CidrBlocks    []string
 	IPv6s                []string
 	SubnetIPv6CidrBlocks []string
@@ -258,6 +259,7 @@ In `backend_test.go`, add a new test function at the end of the file:
 
 ```go
 func TestGetEC2Instance_PassesThroughNetwork(t *testing.T) {
+	ptr := func(s string) *string { return &s }
 	deviceNumber := int64(0)
 	hw := &v1alpha1.Hardware{
 		Spec: v1alpha1.HardwareSpec{
@@ -267,12 +269,12 @@ func TestGetEC2Instance_PassesThroughNetwork(t *testing.T) {
 						Interfaces: &v1alpha1.MetadataInstanceNetworkInterfaces{
 							Macs: map[string]*v1alpha1.MetadataInstanceNetworkInterface{
 								"02:aa:bb:cc:dd:ee": {
-									DeviceNumber:         &deviceNumber,
-									InterfaceID:          "eni-abc",
-									Mac:                  "02:aa:bb:cc:dd:ee",
-									LocalIPv4s:           []string{"10.0.0.5"},
-									SubnetIPv4CidrBlock:  "10.0.0.0/24",
-									VpcIPv4CidrBlocks:    []string{"10.0.0.0/16"},
+									DeviceNumber:        &deviceNumber,
+									InterfaceID:         ptr("eni-abc"),
+									Mac:                 ptr("02:aa:bb:cc:dd:ee"),
+									LocalIPv4s:          []string{"10.0.0.5"},
+									SubnetIPv4CidrBlock: ptr("10.0.0.0/24"),
+									VpcIPv4CidrBlocks:   []string{"10.0.0.0/16"},
 								},
 							},
 						},
@@ -291,14 +293,14 @@ func TestGetEC2Instance_PassesThroughNetwork(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected mac key in network.interfaces; got %+v", got.Metadata.Network)
 	}
-	if iface.InterfaceID != "eni-abc" {
-		t.Errorf("InterfaceID = %q, want eni-abc", iface.InterfaceID)
+	if iface.InterfaceID == nil || *iface.InterfaceID != "eni-abc" {
+		t.Errorf("InterfaceID = %v, want pointer to \"eni-abc\"", iface.InterfaceID)
 	}
 	if diff := cmp.Diff([]string{"10.0.0.5"}, iface.LocalIPv4s); diff != "" {
 		t.Errorf("LocalIPv4s mismatch (-want +got):\n%s", diff)
 	}
-	if iface.SubnetIPv4CidrBlock != "10.0.0.0/24" {
-		t.Errorf("SubnetIPv4CidrBlock = %q", iface.SubnetIPv4CidrBlock)
+	if iface.SubnetIPv4CidrBlock == nil || *iface.SubnetIPv4CidrBlock != "10.0.0.0/24" {
+		t.Errorf("SubnetIPv4CidrBlock = %v, want pointer to \"10.0.0.0/24\"", iface.SubnetIPv4CidrBlock)
 	}
 	if iface.DeviceNumber == nil || *iface.DeviceNumber != 0 {
 		t.Errorf("DeviceNumber = %v, want pointer to 0", iface.DeviceNumber)
@@ -332,24 +334,13 @@ Inside the `if hw.Spec.Metadata != nil && hw.Spec.Metadata.Instance != nil` bloc
 				if src == nil {
 					continue
 				}
-				ifaces[strings.ToLower(mac)] = data.NetworkInterface{
-					DeviceNumber:         src.DeviceNumber,
-					InterfaceID:          src.InterfaceID,
-					LocalHostname:        src.LocalHostname,
-					LocalIPv4s:           src.LocalIPv4s,
-					Mac:                  src.Mac,
-					PublicHostname:       src.PublicHostname,
-					PublicIPv4s:          src.PublicIPv4s,
-					SubnetIPv4CidrBlock:  src.SubnetIPv4CidrBlock,
-					VpcIPv4CidrBlocks:    src.VpcIPv4CidrBlocks,
-					IPv6s:                src.IPv6s,
-					SubnetIPv6CidrBlocks: src.SubnetIPv6CidrBlocks,
-					VpcIPv6CidrBlocks:    src.VpcIPv6CidrBlocks,
-				}
+				ifaces[strings.ToLower(mac)] = data.NetworkInterface(*src)
 			}
 			i.Metadata.Network.Interfaces = ifaces
 		}
 ```
+
+Since both structs now have identical field layouts (Hardware-side `MetadataInstanceNetworkInterface` and data-side `NetworkInterface` have the same ordered fields with matching types), a direct conversion works. If the Go compiler rejects it because the types are distinct, fall back to the explicit field-by-field copy (all fields are simple pointer/slice copies — no dereferences needed).
 
 Add `"strings"` to the imports block if not already present.
 
@@ -416,7 +407,10 @@ var networkInterfaceLeaves = []struct {
 		return strconv.FormatInt(*n.DeviceNumber, 10), true
 	}},
 	{"interface-id", func(n data.NetworkInterface) (string, bool) {
-		return n.InterfaceID, n.InterfaceID != ""
+		if n.InterfaceID == nil {
+			return "", false
+		}
+		return *n.InterfaceID, true
 	}},
 	{"ipv6s", func(n data.NetworkInterface) (string, bool) {
 		if len(n.IPv6s) == 0 {
@@ -425,7 +419,10 @@ var networkInterfaceLeaves = []struct {
 		return strings.Join(n.IPv6s, "\n"), true
 	}},
 	{"local-hostname", func(n data.NetworkInterface) (string, bool) {
-		return n.LocalHostname, n.LocalHostname != ""
+		if n.LocalHostname == nil {
+			return "", false
+		}
+		return *n.LocalHostname, true
 	}},
 	{"local-ipv4s", func(n data.NetworkInterface) (string, bool) {
 		if len(n.LocalIPv4s) == 0 {
@@ -434,10 +431,16 @@ var networkInterfaceLeaves = []struct {
 		return strings.Join(n.LocalIPv4s, "\n"), true
 	}},
 	{"mac", func(n data.NetworkInterface) (string, bool) {
-		return n.Mac, n.Mac != ""
+		if n.Mac == nil {
+			return "", false
+		}
+		return *n.Mac, true
 	}},
 	{"public-hostname", func(n data.NetworkInterface) (string, bool) {
-		return n.PublicHostname, n.PublicHostname != ""
+		if n.PublicHostname == nil {
+			return "", false
+		}
+		return *n.PublicHostname, true
 	}},
 	{"public-ipv4s", func(n data.NetworkInterface) (string, bool) {
 		if len(n.PublicIPv4s) == 0 {
@@ -446,7 +449,10 @@ var networkInterfaceLeaves = []struct {
 		return strings.Join(n.PublicIPv4s, "\n"), true
 	}},
 	{"subnet-ipv4-cidr-block", func(n data.NetworkInterface) (string, bool) {
-		return n.SubnetIPv4CidrBlock, n.SubnetIPv4CidrBlock != ""
+		if n.SubnetIPv4CidrBlock == nil {
+			return "", false
+		}
+		return *n.SubnetIPv4CidrBlock, true
 	}},
 	{"subnet-ipv6-cidr-blocks", func(n data.NetworkInterface) (string, bool) {
 		if len(n.SubnetIPv6CidrBlocks) == 0 {
@@ -525,11 +531,12 @@ import (
 )
 
 func TestLeafValue(t *testing.T) {
+	ptr := func(s string) *string { return &s }
 	dn := int64(3)
 	n := data.NetworkInterface{
-		Mac:                 "02:aa:bb:cc:dd:ee",
+		Mac:                 ptr("02:aa:bb:cc:dd:ee"),
 		LocalIPv4s:          []string{"10.0.0.5", "10.0.0.6"},
-		SubnetIPv4CidrBlock: "10.0.0.0/24",
+		SubnetIPv4CidrBlock: ptr("10.0.0.0/24"),
 		DeviceNumber:        &dn,
 	}
 	cases := []struct {
@@ -556,8 +563,9 @@ func TestLeafValue(t *testing.T) {
 }
 
 func TestLeafListing(t *testing.T) {
+	ptr := func(s string) *string { return &s }
 	n := data.NetworkInterface{
-		Mac:        "02:aa:bb:cc:dd:ee",
+		Mac:        ptr("02:aa:bb:cc:dd:ee"),
 		LocalIPv4s: []string{"10.0.0.5"},
 	}
 	got := leafListing(n)
@@ -582,9 +590,10 @@ func TestMacListing_SortedWithSlash(t *testing.T) {
 }
 
 func TestLookupInterface_CaseInsensitive(t *testing.T) {
+	ptr := func(s string) *string { return &s }
 	net := data.Network{
 		Interfaces: map[string]data.NetworkInterface{
-			"02:aa:bb:cc:dd:ee": {Mac: "02:aa:bb:cc:dd:ee"},
+			"02:aa:bb:cc:dd:ee": {Mac: ptr("02:aa:bb:cc:dd:ee")},
 		},
 	}
 	for _, mac := range []string{"02:aa:bb:cc:dd:ee", "02:AA:BB:CC:DD:EE", "02:Aa:bB:Cc:Dd:Ee"} {
@@ -828,6 +837,7 @@ Append to `frontend_test.go`:
 
 ```go
 func TestFrontendNetworkEndpoints(t *testing.T) {
+	ptr := func(s string) *string { return &s }
 	deviceNumber := int64(0)
 	instance := data.Ec2Instance{
 		Metadata: data.Metadata{
@@ -835,14 +845,14 @@ func TestFrontendNetworkEndpoints(t *testing.T) {
 				Interfaces: map[string]data.NetworkInterface{
 					"02:aa:bb:cc:dd:ee": {
 						DeviceNumber:        &deviceNumber,
-						InterfaceID:         "eni-abc",
-						Mac:                 "02:aa:bb:cc:dd:ee",
+						InterfaceID:         ptr("eni-abc"),
+						Mac:                 ptr("02:aa:bb:cc:dd:ee"),
 						LocalIPv4s:          []string{"10.0.0.5", "10.0.0.6"},
-						SubnetIPv4CidrBlock: "10.0.0.0/24",
+						SubnetIPv4CidrBlock: ptr("10.0.0.0/24"),
 						VpcIPv4CidrBlocks:   []string{"10.0.0.0/16"},
 					},
 					"02:ff:ff:ff:ff:ff": {
-						Mac:        "02:ff:ff:ff:ff:ff",
+						Mac:        ptr("02:ff:ff:ff:ff:ff"),
 						LocalIPv4s: []string{"10.0.1.5"},
 					},
 				},
@@ -918,11 +928,12 @@ func TestFrontendNetworkEndpoints(t *testing.T) {
 }
 
 func TestFrontendNetworkUnknownMac(t *testing.T) {
+	ptr := func(s string) *string { return &s }
 	instance := data.Ec2Instance{
 		Metadata: data.Metadata{
 			Network: data.Network{
 				Interfaces: map[string]data.NetworkInterface{
-					"02:aa:bb:cc:dd:ee": {Mac: "02:aa:bb:cc:dd:ee"},
+					"02:aa:bb:cc:dd:ee": {Mac: ptr("02:aa:bb:cc:dd:ee")},
 				},
 			},
 		},
