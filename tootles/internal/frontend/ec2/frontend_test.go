@@ -351,6 +351,7 @@ instance-id
 iqn
 local-hostname
 local-ipv4
+network/
 operating-system/
 plan
 public-ipv4
