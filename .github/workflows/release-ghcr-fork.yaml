@@ -4,6 +4,7 @@ on:
     branches:
       - main
       - feat/metadata-raid-passthrough
+      - feat/metadata-network
   workflow_dispatch: {}
 
 env:
@@ -35,6 +36,10 @@ jobs:
           GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build \
             -ldflags="-s -w" -o out/tinkerbell-linux-amd64 ./cmd/tinkerbell
 
+      - name: Sanitize branch name for tag
+        id: br
+        run: echo "name=${GITHUB_REF_NAME//\//-}" >> "$GITHUB_OUTPUT"
+
       - uses: docker/setup-buildx-action@v3
 
       - uses: docker/login-action@v3
@@ -50,7 +55,8 @@ jobs:
           platforms: linux/amd64
           push: true
           tags: |
-            ${{ env.IMAGE }}:v0.23.0
             ${{ env.IMAGE }}:${{ github.sha }}
+            ${{ env.IMAGE }}:${{ steps.br.outputs.name }}
+            ${{ github.ref_name == 'feat/metadata-raid-passthrough' && format('{0}:v0.23.0', env.IMAGE) || '' }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
