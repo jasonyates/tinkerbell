@@ -2,6 +2,7 @@ package backend
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -344,6 +345,86 @@ func TestToEC2Instance(t *testing.T) {
 				t.Fatalf("(-want +got):\n%s", diff)
 			}
 		})
+	}
+}
+
+func TestGetHackInstance_PassesThroughRAID(t *testing.T) {
+	hw := &v1alpha1.Hardware{
+		Spec: v1alpha1.HardwareSpec{
+			Metadata: &v1alpha1.HardwareMetadata{
+				Instance: &v1alpha1.MetadataInstance{
+					Storage: &v1alpha1.MetadataInstanceStorage{
+						Disks: []*v1alpha1.MetadataInstanceStorageDisk{
+							{
+								Device:    "/dev/sda",
+								WipeTable: true,
+								Partitions: []*v1alpha1.MetadataInstanceStorageDiskPartition{
+									{Label: "root", Number: 1, Size: 1000000},
+								},
+							},
+						},
+						Raid: []*v1alpha1.MetadataInstanceStorageRAID{
+							{
+								Name:    "/dev/md0",
+								Level:   "1",
+								Devices: []string{"/dev/sda2", "/dev/sdb2"},
+							},
+						},
+						Filesystems: []*v1alpha1.MetadataInstanceStorageFilesystem{
+							{
+								Mount: &v1alpha1.MetadataInstanceStorageMount{
+									Device: "/dev/md0",
+									Format: "ext4",
+									Point:  "/",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	b := New(&mockReader{hw: hw})
+	got, err := b.GetHackInstance(context.Background(), "1.2.3.4")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	marshalled, err := json.Marshal(got)
+	if err != nil {
+		t.Fatalf("failed to marshal HackInstance: %v", err)
+	}
+
+	var parsed struct {
+		Metadata struct {
+			Instance struct {
+				Storage struct {
+					Raid []struct {
+						Name    string   `json:"name"`
+						Level   string   `json:"level"`
+						Devices []string `json:"devices"`
+					} `json:"raid"`
+				} `json:"storage"`
+			} `json:"instance"`
+		} `json:"metadata"`
+	}
+	if err := json.Unmarshal(marshalled, &parsed); err != nil {
+		t.Fatalf("failed to unmarshal HackInstance JSON: %v", err)
+	}
+
+	raid := parsed.Metadata.Instance.Storage.Raid
+	if len(raid) != 1 {
+		t.Fatalf("expected exactly 1 raid entry, got %d", len(raid))
+	}
+	if raid[0].Name != "/dev/md0" {
+		t.Errorf("raid name: got %q, want %q", raid[0].Name, "/dev/md0")
+	}
+	if raid[0].Level != "1" {
+		t.Errorf("raid level: got %q, want %q", raid[0].Level, "1")
+	}
+	if diff := cmp.Diff([]string{"/dev/sda2", "/dev/sdb2"}, raid[0].Devices); diff != "" {
+		t.Errorf("raid devices mismatch (-want +got):\n%s", diff)
 	}
 }
 

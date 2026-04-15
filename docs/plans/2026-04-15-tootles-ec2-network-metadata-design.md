@@ -93,7 +93,7 @@ New file: `tootles/internal/frontend/ec2/network.go` with its own unit tests. Re
 
 ## Testing
 
-1. **Backend round-trip test** (`pkg/backend/kube/tootles_test.go`) — construct `Hardware` with `Metadata.Instance.Network` for two MACs, run through the backend, assert `Ec2Instance.Metadata.Network` contains both. Same style as the existing raid test.
+1. **Backend round-trip test** (`tootles/internal/backend/backend_test.go`) — construct `Hardware` with `Metadata.Instance.Network` for two MACs, run through the backend, assert the resulting `Ec2Instance.Metadata.Network` has both MACs with the right fields. Same style as the raid passthrough test in that same file.
 2. **Subtree handler unit tests** (`tootles/internal/frontend/ec2/network_test.go`) — table-driven: directory listings at each level, scalar leaves, list leaves, unknown MAC, unset field, uppercase MAC normalisation.
 3. **End-to-end HTTP test** in the existing frontend test suite — full cloud-init-style recursive walk.
 4. **CRD schema** — regenerate with `controller-gen`, commit the updated YAML.
