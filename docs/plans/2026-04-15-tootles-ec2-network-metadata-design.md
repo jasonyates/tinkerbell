@@ -56,7 +56,7 @@ type MetadataInstanceNetworkInterface struct {
 
 ### Tootles data struct — `pkg/data/instance.go`
 
-Mirror the same shape on `Ec2Instance.Metadata.Network`. The typed JSON round-trip already used in the backend for `storage.raid` (commit `82e7fcab`) picks this up automatically — no converter code to write.
+Mirror the same shape on `Ec2Instance.Metadata.Network`. Unlike the Hack (rootio) frontend — which uses a typed JSON round-trip (`toHackInstance`, commit `82e7fcab` for raid) — the EC2 frontend's `toEC2Instance` is hand-written and copies fields explicitly. Extend it with a loop that lowercases MAC keys and copies the per-interface struct via direct Go type conversion (safe because field layouts are identical).
 
 ### Fields deliberately excluded
 
