@@ -483,6 +483,71 @@ func TestGetEC2Instance_PassesThroughNetwork(t *testing.T) {
 	}
 }
 
+func TestGetEC2Instance_LowercasesMACKey(t *testing.T) {
+	ptr := func(s string) *string { return &s }
+	hw := &v1alpha1.Hardware{
+		Spec: v1alpha1.HardwareSpec{
+			Metadata: &v1alpha1.HardwareMetadata{
+				Instance: &v1alpha1.MetadataInstance{
+					Network: &v1alpha1.MetadataInstanceNetwork{
+						Interfaces: &v1alpha1.MetadataInstanceNetworkInterfaces{
+							Macs: map[string]*v1alpha1.MetadataInstanceNetworkInterface{
+								"02:AA:BB:CC:DD:EE": {
+									InterfaceID: ptr("eni-upper"),
+									Mac:         ptr("02:AA:BB:CC:DD:EE"),
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	b := New(&mockReader{hw: hw})
+	got, err := b.GetEC2Instance(context.Background(), "10.0.0.5")
+	if err != nil {
+		t.Fatalf("GetEC2Instance: %v", err)
+	}
+
+	if _, ok := got.Metadata.Network.Interfaces["02:AA:BB:CC:DD:EE"]; ok {
+		t.Errorf("uppercase MAC key must not appear in output; got %+v", got.Metadata.Network.Interfaces)
+	}
+	iface, ok := got.Metadata.Network.Interfaces["02:aa:bb:cc:dd:ee"]
+	if !ok {
+		t.Fatalf("expected lowercased mac key in network.interfaces; got %+v", got.Metadata.Network.Interfaces)
+	}
+	if iface.InterfaceID == nil || *iface.InterfaceID != "eni-upper" {
+		t.Errorf("InterfaceID = %v, want pointer to \"eni-upper\"", iface.InterfaceID)
+	}
+}
+
+func TestGetEC2Instance_SkipsNilNetworkInterface(t *testing.T) {
+	hw := &v1alpha1.Hardware{
+		Spec: v1alpha1.HardwareSpec{
+			Metadata: &v1alpha1.HardwareMetadata{
+				Instance: &v1alpha1.MetadataInstance{
+					Network: &v1alpha1.MetadataInstanceNetwork{
+						Interfaces: &v1alpha1.MetadataInstanceNetworkInterfaces{
+							Macs: map[string]*v1alpha1.MetadataInstanceNetworkInterface{
+								"02:aa:bb:cc:dd:ee": nil,
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	b := New(&mockReader{hw: hw})
+	got, err := b.GetEC2Instance(context.Background(), "10.0.0.5")
+	if err != nil {
+		t.Fatalf("GetEC2Instance: %v", err)
+	}
+
+	if _, ok := got.Metadata.Network.Interfaces["02:aa:bb:cc:dd:ee"]; ok {
+		t.Errorf("nil source interface must be skipped, but key present in output; got %+v", got.Metadata.Network.Interfaces)
+	}
+}
+
 func TestIsNotFound(t *testing.T) {
 	tests := map[string]struct {
 		err  error
