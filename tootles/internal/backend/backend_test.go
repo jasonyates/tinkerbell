@@ -434,6 +434,77 @@ func TestGetHackInstance_PassesThroughRAID(t *testing.T) {
 	}
 }
 
+func TestGetHackInstance_PassesThroughVolumeGroups(t *testing.T) {
+	hw := &v1alpha1.Hardware{
+		Spec: v1alpha1.HardwareSpec{
+			Metadata: &v1alpha1.HardwareMetadata{
+				Instance: &v1alpha1.MetadataInstance{
+					Storage: &v1alpha1.MetadataInstanceStorage{
+						VolumeGroups: []*v1alpha1.MetadataInstanceStorageVolumeGroup{
+							{
+								Name:            "vg0",
+								PhysicalVolumes: []string{"/dev/md0"},
+								LogicalVolumes: []*v1alpha1.MetadataInstanceStorageLogicalVolume{
+									{Name: "root", Size: 42949672960},
+									{Name: "docker", Size: 0},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	b := New(&mockReader{hw: hw})
+	got, err := b.GetHackInstance(context.Background(), "1.2.3.4")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	marshalled, err := json.Marshal(got)
+	if err != nil {
+		t.Fatalf("failed to marshal HackInstance: %v", err)
+	}
+
+	var parsed struct {
+		Metadata struct {
+			Instance struct {
+				Storage struct {
+					VolumeGroups []struct {
+						Name            string   `json:"name"`
+						PhysicalVolumes []string `json:"physical_volumes"`
+						LogicalVolumes  []struct {
+							Name string `json:"name"`
+							Size uint64 `json:"size"`
+						} `json:"logical_volumes"`
+					} `json:"volume_groups"`
+				} `json:"storage"`
+			} `json:"instance"`
+		} `json:"metadata"`
+	}
+	if err := json.Unmarshal(marshalled, &parsed); err != nil {
+		t.Fatalf("failed to unmarshal HackInstance JSON: %v", err)
+	}
+
+	vgs := parsed.Metadata.Instance.Storage.VolumeGroups
+	if len(vgs) != 1 || vgs[0].Name != "vg0" {
+		t.Fatalf("vgs = %+v; want 1 entry named vg0\nJSON=%s", vgs, marshalled)
+	}
+	if diff := cmp.Diff([]string{"/dev/md0"}, vgs[0].PhysicalVolumes); diff != "" {
+		t.Errorf("vg physical_volumes mismatch (-want +got):\n%s", diff)
+	}
+	if len(vgs[0].LogicalVolumes) != 2 {
+		t.Fatalf("vgs[0].LogicalVolumes = %+v; want 2 entries", vgs[0].LogicalVolumes)
+	}
+	if vgs[0].LogicalVolumes[0].Name != "root" || vgs[0].LogicalVolumes[0].Size != 42949672960 {
+		t.Errorf("lv[0] = %+v, want {root, 42949672960}", vgs[0].LogicalVolumes[0])
+	}
+	if vgs[0].LogicalVolumes[1].Name != "docker" || vgs[0].LogicalVolumes[1].Size != 0 {
+		t.Errorf("lv[1] = %+v, want {docker, 0}", vgs[0].LogicalVolumes[1])
+	}
+}
+
 func TestGetEC2Instance_PassesThroughNetwork(t *testing.T) {
 	ptr := func(s string) *string { return &s }
 	deviceNumber := int64(0)

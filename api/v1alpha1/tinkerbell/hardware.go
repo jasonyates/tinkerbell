@@ -287,9 +287,10 @@ type MetadataInstanceIP struct {
 }
 
 type MetadataInstanceStorage struct {
-	Disks       []*MetadataInstanceStorageDisk       `json:"disks,omitempty"`
-	Raid        []*MetadataInstanceStorageRAID       `json:"raid,omitempty"`
-	Filesystems []*MetadataInstanceStorageFilesystem `json:"filesystems,omitempty"`
+	Disks        []*MetadataInstanceStorageDisk        `json:"disks,omitempty"`
+	Raid         []*MetadataInstanceStorageRAID        `json:"raid,omitempty"`
+	VolumeGroups []*MetadataInstanceStorageVolumeGroup `json:"volume_groups,omitempty"`
+	Filesystems  []*MetadataInstanceStorageFilesystem  `json:"filesystems,omitempty"`
 }
 
 type MetadataInstanceStorageDisk struct {
@@ -311,6 +312,24 @@ type MetadataInstanceStorageRAID struct {
 	Level   string   `json:"level,omitempty"`
 	Devices []string `json:"devices,omitempty"`
 	Spare   int64    `json:"spare,omitempty"`
+}
+
+// MetadataInstanceStorageVolumeGroup describes a single LVM volume group.
+// Field names and JSON tags match rootio's storage.VolumeGroup type exactly.
+type MetadataInstanceStorageVolumeGroup struct {
+	Name            string                                  `json:"name,omitempty"`
+	PhysicalVolumes []string                                `json:"physical_volumes,omitempty"`
+	LogicalVolumes  []*MetadataInstanceStorageLogicalVolume `json:"logical_volumes,omitempty"`
+	Tags            []string                                `json:"tags,omitempty"`
+}
+
+// MetadataInstanceStorageLogicalVolume describes a single LV inside a VG.
+// Size is in bytes; 0 means "use 100%FREE" (only valid on the last LV in a VG).
+type MetadataInstanceStorageLogicalVolume struct {
+	Name string   `json:"name,omitempty"`
+	Size uint64   `json:"size,omitempty"`
+	Tags []string `json:"tags,omitempty"`
+	Opts []string `json:"opts,omitempty"`
 }
 
 type MetadataInstanceStorageFilesystem struct {

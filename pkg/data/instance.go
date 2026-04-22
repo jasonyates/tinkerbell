@@ -95,6 +95,17 @@ type HackInstance struct {
 					Devices []string `json:"devices"`
 					Spare   []string `json:"spare,omitempty"`
 				} `json:"raid"`
+				VolumeGroups []struct {
+					Name            string   `json:"name,omitempty"`
+					PhysicalVolumes []string `json:"physical_volumes,omitempty"`
+					LogicalVolumes  []struct {
+						Name string   `json:"name,omitempty"`
+						Size uint64   `json:"size,omitempty"`
+						Tags []string `json:"tags,omitempty"`
+						Opts []string `json:"opts,omitempty"`
+					} `json:"logical_volumes,omitempty"`
+					Tags []string `json:"tags,omitempty"`
+				} `json:"volume_groups,omitempty"`
 				Filesystems []struct {
 					Mount struct {
 						Create struct {

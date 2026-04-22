@@ -489,6 +489,45 @@ spec:
                                   type: integer
                               type: object
                             type: array
+                          volume_groups:
+                            items:
+                              description: |-
+                                MetadataInstanceStorageVolumeGroup describes a single LVM volume group.
+                                Field names and JSON tags match rootio's storage.VolumeGroup type exactly.
+                              properties:
+                                logical_volumes:
+                                  items:
+                                    description: |-
+                                      MetadataInstanceStorageLogicalVolume describes a single LV inside a VG.
+                                      Size is in bytes; 0 means "use 100%FREE" (only valid on the last LV in a VG).
+                                    properties:
+                                      name:
+                                        type: string
+                                      opts:
+                                        items:
+                                          type: string
+                                        type: array
+                                      size:
+                                        format: int64
+                                        type: integer
+                                      tags:
+                                        items:
+                                          type: string
+                                        type: array
+                                    type: object
+                                  type: array
+                                name:
+                                  type: string
+                                physical_volumes:
+                                  items:
+                                    type: string
+                                  type: array
+                                tags:
+                                  items:
+                                    type: string
+                                  type: array
+                              type: object
+                            type: array
                         type: object
                       tags:
                         items:
