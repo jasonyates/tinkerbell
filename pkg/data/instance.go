@@ -117,6 +117,21 @@ type HackInstance struct {
 					} `json:"mount"`
 				} `json:"filesystems"`
 			} `json:"storage"`
+			Console *struct {
+				TTY  string `json:"tty,omitempty"`
+				Baud int    `json:"baud,omitempty"`
+			} `json:"console,omitempty"`
+			Users []struct {
+				Username          string   `json:"username"`
+				CryptedPassword   string   `json:"crypted_password,omitempty"`
+				SSHAuthorizedKeys []string `json:"ssh_authorized_keys,omitempty"`
+				Sudo              bool     `json:"sudo,omitempty"`
+				Shell             string   `json:"shell,omitempty"`
+			} `json:"users,omitempty"`
+			SSHD *struct {
+				PermitRootLogin        string `json:"permit_root_login,omitempty"`
+				PasswordAuthentication *bool  `json:"password_authentication,omitempty"`
+			} `json:"sshd,omitempty"`
 		} `json:"instance"`
 	} `json:"metadata"`
 }

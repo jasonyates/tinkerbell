@@ -644,3 +644,94 @@ func TestIsNotFound(t *testing.T) {
 		})
 	}
 }
+
+func TestGetHackInstance_PassesThroughConsole(t *testing.T) {
+	hw := &v1alpha1.Hardware{
+		Spec: v1alpha1.HardwareSpec{
+			Metadata: &v1alpha1.HardwareMetadata{
+				Instance: &v1alpha1.MetadataInstance{
+					Console: &v1alpha1.MetadataInstanceConsole{TTY: "ttyS1", Baud: 115200},
+				},
+			},
+		},
+	}
+	b := New(&mockReader{hw: hw})
+	got, err := b.GetHackInstance(context.Background(), "1.2.3.4")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	out, _ := json.Marshal(got)
+	var p struct {
+		Metadata struct {
+			Instance struct {
+				Console struct {
+					TTY  string `json:"tty"`
+					Baud int    `json:"baud"`
+				} `json:"console"`
+			} `json:"instance"`
+		} `json:"metadata"`
+	}
+	if err := json.Unmarshal(out, &p); err != nil {
+		t.Fatalf("reparse: %v", err)
+	}
+	if p.Metadata.Instance.Console.TTY != "ttyS1" || p.Metadata.Instance.Console.Baud != 115200 {
+		t.Errorf("console = %+v; want {ttyS1 115200}\nJSON=%s", p.Metadata.Instance.Console, out)
+	}
+}
+
+func TestGetHackInstance_PassesThroughUsersAndSSHD(t *testing.T) {
+	yes := true
+	hw := &v1alpha1.Hardware{
+		Spec: v1alpha1.HardwareSpec{
+			Metadata: &v1alpha1.HardwareMetadata{
+				Instance: &v1alpha1.MetadataInstance{
+					Users: []*v1alpha1.MetadataInstanceUser{
+						{Username: "ubuntu", CryptedPassword: "$6$hash", SSHAuthorizedKeys: []string{"ssh-ed25519 AAA..."}, Sudo: true, Shell: "/bin/bash"},
+					},
+					SSHD: &v1alpha1.MetadataInstanceSSHD{PermitRootLogin: "prohibit-password", PasswordAuthentication: &yes},
+				},
+			},
+		},
+	}
+	b := New(&mockReader{hw: hw})
+	got, err := b.GetHackInstance(context.Background(), "1.2.3.4")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	out, _ := json.Marshal(got)
+	var p struct {
+		Metadata struct {
+			Instance struct {
+				Users []struct {
+					Username          string   `json:"username"`
+					CryptedPassword   string   `json:"crypted_password"`
+					SSHAuthorizedKeys []string `json:"ssh_authorized_keys"`
+					Sudo              bool     `json:"sudo"`
+					Shell             string   `json:"shell"`
+				} `json:"users"`
+				SSHD struct {
+					PermitRootLogin        string `json:"permit_root_login"`
+					PasswordAuthentication *bool  `json:"password_authentication"`
+				} `json:"sshd"`
+			} `json:"instance"`
+		} `json:"metadata"`
+	}
+	if err := json.Unmarshal(out, &p); err != nil {
+		t.Fatalf("reparse: %v", err)
+	}
+	if len(p.Metadata.Instance.Users) != 1 || p.Metadata.Instance.Users[0].Username != "ubuntu" {
+		t.Errorf("users = %+v\nJSON=%s", p.Metadata.Instance.Users, out)
+	}
+	if !p.Metadata.Instance.Users[0].Sudo {
+		t.Errorf("sudo not passed through")
+	}
+	if p.Metadata.Instance.Users[0].Shell != "/bin/bash" {
+		t.Errorf("shell = %q", p.Metadata.Instance.Users[0].Shell)
+	}
+	if p.Metadata.Instance.SSHD.PermitRootLogin != "prohibit-password" {
+		t.Errorf("permit_root_login = %q", p.Metadata.Instance.SSHD.PermitRootLogin)
+	}
+	if p.Metadata.Instance.SSHD.PasswordAuthentication == nil || !*p.Metadata.Instance.SSHD.PasswordAuthentication {
+		t.Errorf("password_authentication = %+v; want ptr(true)", p.Metadata.Instance.SSHD.PasswordAuthentication)
+	}
+}

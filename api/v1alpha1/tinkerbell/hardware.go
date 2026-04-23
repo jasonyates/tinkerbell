@@ -267,6 +267,9 @@ type MetadataInstance struct {
 	SSHKeys             []string                         `json:"ssh_keys,omitempty"`
 	NetworkReady        bool                             `json:"network_ready,omitempty"`
 	Network             *MetadataInstanceNetwork         `json:"network,omitempty"`
+	Console             *MetadataInstanceConsole         `json:"console,omitempty"`
+	Users               []*MetadataInstanceUser          `json:"users,omitempty"`
+	SSHD                *MetadataInstanceSSHD            `json:"sshd,omitempty"`
 }
 
 type MetadataInstanceOperatingSystem struct {
@@ -330,6 +333,33 @@ type MetadataInstanceStorageLogicalVolume struct {
 	Size uint64   `json:"size,omitempty"`
 	Tags []string `json:"tags,omitempty"`
 	Opts []string `json:"opts,omitempty"`
+}
+
+// MetadataInstanceConsole controls the serial console tty/baud
+// applied to the installed OS by the serial-console action.
+type MetadataInstanceConsole struct {
+	TTY  string `json:"tty,omitempty"`
+	Baud int    `json:"baud,omitempty"`
+}
+
+// MetadataInstanceUser is an additional (non-root) user the
+// user-manage action creates on the installed OS. Username is
+// required; other fields are applied only when set.
+type MetadataInstanceUser struct {
+	Username          string   `json:"username"`
+	CryptedPassword   string   `json:"crypted_password,omitempty"`
+	SSHAuthorizedKeys []string `json:"ssh_authorized_keys,omitempty"`
+	Sudo              bool     `json:"sudo,omitempty"`
+	Shell             string   `json:"shell,omitempty"`
+}
+
+// MetadataInstanceSSHD configures global sshd_config behaviour
+// independently of per-user identity. Leave fields unset
+// (PermitRootLogin empty, PasswordAuthentication nil) to inherit
+// the distro default.
+type MetadataInstanceSSHD struct {
+	PermitRootLogin        string `json:"permit_root_login,omitempty"`
+	PasswordAuthentication *bool  `json:"password_authentication,omitempty"`
 }
 
 type MetadataInstanceStorageFilesystem struct {

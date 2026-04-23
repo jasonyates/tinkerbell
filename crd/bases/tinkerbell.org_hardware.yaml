@@ -283,6 +283,16 @@ spec:
                         type: boolean
                       always_pxe:
                         type: boolean
+                      console:
+                        description: |-
+                          MetadataInstanceConsole controls the serial console tty/baud
+                          applied to the installed OS by the serial-console action.
+                        properties:
+                          baud:
+                            type: integer
+                          tty:
+                            type: string
+                        type: object
                       crypted_root_password:
                         type: string
                       hostname:
@@ -401,6 +411,18 @@ spec:
                         items:
                           type: string
                         type: array
+                      sshd:
+                        description: |-
+                          MetadataInstanceSSHD configures global sshd_config behaviour
+                          independently of per-user identity. Leave fields unset
+                          (PermitRootLogin empty, PasswordAuthentication nil) to inherit
+                          the distro default.
+                        properties:
+                          password_authentication:
+                            type: boolean
+                          permit_root_login:
+                            type: string
+                        type: object
                       state:
                         type: string
                       storage:
@@ -535,6 +557,29 @@ spec:
                         type: array
                       userdata:
                         type: string
+                      users:
+                        items:
+                          description: |-
+                            MetadataInstanceUser is an additional (non-root) user the
+                            user-manage action creates on the installed OS. Username is
+                            required; other fields are applied only when set.
+                          properties:
+                            crypted_password:
+                              type: string
+                            shell:
+                              type: string
+                            ssh_authorized_keys:
+                              items:
+                                type: string
+                              type: array
+                            sudo:
+                              type: boolean
+                            username:
+                              type: string
+                          required:
+                          - username
+                          type: object
+                        type: array
                     type: object
                   manufacturer:
                     properties:
