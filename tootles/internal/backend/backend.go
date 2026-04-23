@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 
 	v1alpha1 "github.com/tinkerbell/tinkerbell/api/v1alpha1/tinkerbell"
 	"github.com/tinkerbell/tinkerbell/pkg/data"
@@ -133,6 +134,18 @@ func toEC2Instance(hw v1alpha1.Hardware) data.Ec2Instance {
 			if ip.Family == 6 && i.Metadata.PublicIPv6 == "" {
 				i.Metadata.PublicIPv6 = ip.Address
 			}
+		}
+
+		if hw.Spec.Metadata.Instance.Network != nil &&
+			hw.Spec.Metadata.Instance.Network.Interfaces != nil {
+			ifaces := make(map[string]data.NetworkInterface, len(hw.Spec.Metadata.Instance.Network.Interfaces.Macs))
+			for mac, src := range hw.Spec.Metadata.Instance.Network.Interfaces.Macs {
+				if src == nil {
+					continue
+				}
+				ifaces[strings.ToLower(mac)] = data.NetworkInterface(*src)
+			}
+			i.Metadata.Network.Interfaces = ifaces
 		}
 	}
 

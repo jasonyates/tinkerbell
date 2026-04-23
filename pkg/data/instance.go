@@ -26,6 +26,7 @@ type Metadata struct {
 	PublicIPv6      string
 	LocalIPv4       string
 	OperatingSystem OperatingSystem
+	Network         InstanceNetwork
 }
 
 // OperatingSystem is part of Metadata.
@@ -40,6 +41,37 @@ type OperatingSystem struct {
 // LicenseActivation is part of OperatingSystem.
 type LicenseActivation struct {
 	State string
+}
+
+// InstanceNetwork is part of Metadata. Mirrors the AWS EC2 metadata
+// network/ tree. Named InstanceNetwork (rather than Network) to avoid
+// collision with the agent-attribute Network type in attributes.go.
+type InstanceNetwork struct {
+	// Interfaces is keyed by lowercase, colon-separated MAC address.
+	Interfaces map[string]NetworkInterface
+}
+
+// NetworkInterface holds the per-NIC fields served under
+// /meta-data/network/interfaces/macs/{mac}/. Scalar pointer fields
+// distinguish "not set" (served as HTTP 404 by the IMDS frontend) from
+// "set to empty string" (served as 200 with empty body). Slice fields
+// use nil vs non-nil for the same distinction.
+//
+// Field order matches v1alpha1.MetadataInstanceNetworkInterface so that
+// the backend converter can use a direct Go type conversion.
+type NetworkInterface struct {
+	DeviceNumber         *int64
+	InterfaceID          *string
+	LocalHostname        *string
+	LocalIPv4s           []string
+	Mac                  *string
+	PublicHostname       *string
+	PublicIPv4s          []string
+	SubnetIPv4CidrBlock  *string
+	VpcIPv4CidrBlocks    []string
+	IPv6s                []string
+	SubnetIPv6CidrBlocks []string
+	VpcIPv6CidrBlocks    []string
 }
 
 // Instance is a representation of the instance metadata. Its based on the rooitio hub action
@@ -57,6 +89,12 @@ type HackInstance struct {
 					} `json:"partitions"`
 					WipeTable bool `json:"wipe_table"`
 				} `json:"disks"`
+				Raid []struct {
+					Name    string   `json:"name"`
+					Level   string   `json:"level"`
+					Devices []string `json:"devices"`
+					Spare   []string `json:"spare,omitempty"`
+				} `json:"raid"`
 				Filesystems []struct {
 					Mount struct {
 						Create struct {
