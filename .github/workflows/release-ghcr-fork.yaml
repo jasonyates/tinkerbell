@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - main
+      - revert/tootles-network-metadata
   workflow_dispatch: {}
 
 env:

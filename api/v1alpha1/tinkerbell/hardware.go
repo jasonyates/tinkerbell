@@ -266,7 +266,6 @@ type MetadataInstance struct {
 	Storage             *MetadataInstanceStorage         `json:"storage,omitempty"`
 	SSHKeys             []string                         `json:"ssh_keys,omitempty"`
 	NetworkReady        bool                             `json:"network_ready,omitempty"`
-	Network             *MetadataInstanceNetwork         `json:"network,omitempty"`
 	Console             *MetadataInstanceConsole         `json:"console,omitempty"`
 	Users               []*MetadataInstanceUser          `json:"users,omitempty"`
 	SSHD                *MetadataInstanceSSHD            `json:"sshd,omitempty"`
@@ -385,47 +384,6 @@ type MetadataInstanceStorageFile struct {
 type MetadataInstanceStorageMountFilesystemOptions struct {
 	Force   bool     `json:"force,omitempty"`
 	Options []string `json:"options,omitempty"`
-}
-
-// MetadataInstanceNetwork exposes per-interface network configuration, modelled on
-// AWS EC2 instance metadata's network key (API version 2011-01-01 onward).
-// It is consumed by the tootles EC2 IMDS frontend so cloud-init's EC2 datasource
-// can configure NICs from IMDS.
-type MetadataInstanceNetwork struct {
-	Interfaces *MetadataInstanceNetworkInterfaces `json:"interfaces,omitempty"`
-}
-
-// MetadataInstanceNetworkInterfaces groups per-interface configuration under
-// the IMDS /meta-data/network/interfaces/ path. Currently only Macs is
-// populated; the wrapper preserves room for non-MAC-keyed siblings without
-// a breaking schema change.
-type MetadataInstanceNetworkInterfaces struct {
-	// Macs maps lowercase, colon-separated MAC addresses (e.g. "02:aa:bb:cc:dd:ee")
-	// to their per-interface configuration. The key is the URL segment used in the
-	// IMDS tree at /meta-data/network/interfaces/macs/{mac}/.
-	Macs map[string]*MetadataInstanceNetworkInterface `json:"macs,omitempty"`
-}
-
-// MetadataInstanceNetworkInterface holds the per-NIC fields served at
-// /meta-data/network/interfaces/macs/{mac}/. Scalar pointer fields
-// distinguish "not set" (served as HTTP 404 by the IMDS frontend) from
-// "set to empty string" (served as 200 with empty body). Slice fields use
-// nil vs non-nil for the same distinction.
-type MetadataInstanceNetworkInterface struct {
-	DeviceNumber  *int64   `json:"device-number,omitempty"`
-	InterfaceID   *string  `json:"interface-id,omitempty"`
-	LocalHostname *string  `json:"local-hostname,omitempty"`
-	LocalIPv4s    []string `json:"local-ipv4s,omitempty"`
-	// Mac is the value served at .../{mac}/mac. Deliberately not auto-derived
-	// from the map key: if unset, the IMDS handler returns 404 for that leaf.
-	Mac                  *string  `json:"mac,omitempty"`
-	PublicHostname       *string  `json:"public-hostname,omitempty"`
-	PublicIPv4s          []string `json:"public-ipv4s,omitempty"`
-	SubnetIPv4CidrBlock  *string  `json:"subnet-ipv4-cidr-block,omitempty"`
-	VpcIPv4CidrBlocks    []string `json:"vpc-ipv4-cidr-blocks,omitempty"`
-	IPv6s                []string `json:"ipv6s,omitempty"`
-	SubnetIPv6CidrBlocks []string `json:"subnet-ipv6-cidr-blocks,omitempty"`
-	VpcIPv6CidrBlocks    []string `json:"vpc-ipv6-cidr-blocks,omitempty"`
 }
 
 type MetadataCustom struct {

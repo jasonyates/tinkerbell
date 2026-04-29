@@ -15,12 +15,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// Compile-time assertion: the Hardware CR per-interface type must stay
-// layout-identical to data.NetworkInterface so toEC2Instance can use a
-// direct Go type conversion. Reordering or re-typing a field on either
-// side fails this at build time.
-var _ = data.NetworkInterface(v1alpha1.MetadataInstanceNetworkInterface{})
-
 type mockReader struct {
 	hw  *v1alpha1.Hardware
 	err error
@@ -502,120 +496,6 @@ func TestGetHackInstance_PassesThroughVolumeGroups(t *testing.T) {
 	}
 	if vgs[0].LogicalVolumes[1].Name != "docker" || vgs[0].LogicalVolumes[1].Size != 0 {
 		t.Errorf("lv[1] = %+v, want {docker, 0}", vgs[0].LogicalVolumes[1])
-	}
-}
-
-func TestGetEC2Instance_PassesThroughNetwork(t *testing.T) {
-	ptr := func(s string) *string { return &s }
-	deviceNumber := int64(0)
-	hw := &v1alpha1.Hardware{
-		Spec: v1alpha1.HardwareSpec{
-			Metadata: &v1alpha1.HardwareMetadata{
-				Instance: &v1alpha1.MetadataInstance{
-					Network: &v1alpha1.MetadataInstanceNetwork{
-						Interfaces: &v1alpha1.MetadataInstanceNetworkInterfaces{
-							Macs: map[string]*v1alpha1.MetadataInstanceNetworkInterface{
-								"02:aa:bb:cc:dd:ee": {
-									DeviceNumber:        &deviceNumber,
-									InterfaceID:         ptr("eni-abc"),
-									Mac:                 ptr("02:aa:bb:cc:dd:ee"),
-									LocalIPv4s:          []string{"10.0.0.5"},
-									SubnetIPv4CidrBlock: ptr("10.0.0.0/24"),
-									VpcIPv4CidrBlocks:   []string{"10.0.0.0/16"},
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-	}
-	b := New(&mockReader{hw: hw})
-	got, err := b.GetEC2Instance(context.Background(), "10.0.0.5")
-	if err != nil {
-		t.Fatalf("GetEC2Instance: %v", err)
-	}
-
-	iface, ok := got.Metadata.Network.Interfaces["02:aa:bb:cc:dd:ee"]
-	if !ok {
-		t.Fatalf("expected mac key in network.interfaces; got %+v", got.Metadata.Network)
-	}
-	if iface.InterfaceID == nil || *iface.InterfaceID != "eni-abc" {
-		t.Errorf("InterfaceID = %v, want pointer to \"eni-abc\"", iface.InterfaceID)
-	}
-	if diff := cmp.Diff([]string{"10.0.0.5"}, iface.LocalIPv4s); diff != "" {
-		t.Errorf("LocalIPv4s mismatch (-want +got):\n%s", diff)
-	}
-	if iface.SubnetIPv4CidrBlock == nil || *iface.SubnetIPv4CidrBlock != "10.0.0.0/24" {
-		t.Errorf("SubnetIPv4CidrBlock = %v, want pointer to \"10.0.0.0/24\"", iface.SubnetIPv4CidrBlock)
-	}
-	if iface.DeviceNumber == nil || *iface.DeviceNumber != 0 {
-		t.Errorf("DeviceNumber = %v, want pointer to 0", iface.DeviceNumber)
-	}
-}
-
-func TestGetEC2Instance_LowercasesMACKey(t *testing.T) {
-	ptr := func(s string) *string { return &s }
-	hw := &v1alpha1.Hardware{
-		Spec: v1alpha1.HardwareSpec{
-			Metadata: &v1alpha1.HardwareMetadata{
-				Instance: &v1alpha1.MetadataInstance{
-					Network: &v1alpha1.MetadataInstanceNetwork{
-						Interfaces: &v1alpha1.MetadataInstanceNetworkInterfaces{
-							Macs: map[string]*v1alpha1.MetadataInstanceNetworkInterface{
-								"02:AA:BB:CC:DD:EE": {
-									InterfaceID: ptr("eni-upper"),
-									Mac:         ptr("02:AA:BB:CC:DD:EE"),
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-	}
-	b := New(&mockReader{hw: hw})
-	got, err := b.GetEC2Instance(context.Background(), "10.0.0.5")
-	if err != nil {
-		t.Fatalf("GetEC2Instance: %v", err)
-	}
-
-	if _, ok := got.Metadata.Network.Interfaces["02:AA:BB:CC:DD:EE"]; ok {
-		t.Errorf("uppercase MAC key must not appear in output; got %+v", got.Metadata.Network.Interfaces)
-	}
-	iface, ok := got.Metadata.Network.Interfaces["02:aa:bb:cc:dd:ee"]
-	if !ok {
-		t.Fatalf("expected lowercased mac key in network.interfaces; got %+v", got.Metadata.Network.Interfaces)
-	}
-	if iface.InterfaceID == nil || *iface.InterfaceID != "eni-upper" {
-		t.Errorf("InterfaceID = %v, want pointer to \"eni-upper\"", iface.InterfaceID)
-	}
-}
-
-func TestGetEC2Instance_SkipsNilNetworkInterface(t *testing.T) {
-	hw := &v1alpha1.Hardware{
-		Spec: v1alpha1.HardwareSpec{
-			Metadata: &v1alpha1.HardwareMetadata{
-				Instance: &v1alpha1.MetadataInstance{
-					Network: &v1alpha1.MetadataInstanceNetwork{
-						Interfaces: &v1alpha1.MetadataInstanceNetworkInterfaces{
-							Macs: map[string]*v1alpha1.MetadataInstanceNetworkInterface{
-								"02:aa:bb:cc:dd:ee": nil,
-							},
-						},
-					},
-				},
-			},
-		},
-	}
-	b := New(&mockReader{hw: hw})
-	got, err := b.GetEC2Instance(context.Background(), "10.0.0.5")
-	if err != nil {
-		t.Fatalf("GetEC2Instance: %v", err)
-	}
-
-	if _, ok := got.Metadata.Network.Interfaces["02:aa:bb:cc:dd:ee"]; ok {
-		t.Errorf("nil source interface must be skipped, but key present in output; got %+v", got.Metadata.Network.Interfaces)
 	}
 }
 

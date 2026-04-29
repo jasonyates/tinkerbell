@@ -75,15 +75,6 @@ func (f Frontend) Configure(router gin.IRouter) {
 		staticRoutes.FromEndpoint(r.Endpoint)
 	}
 
-	// Register dynamic handlers for the /meta-data/network/ subtree. Also
-	// seed the static-route builder with a leaf under /meta-data/network/
-	// so the /meta-data/ listing correctly surfaces "network/" as a child.
-	staticRoutes.FromEndpoint("/meta-data/network/interfaces")
-	f.configureNetworkRoutes(v20090404, false)
-	if f.instanceEndpoint {
-		f.configureNetworkRoutes(v20090404viaInstanceID, true)
-	}
-
 	staticEndpointBinder := func(router ginutil.TrailingSlashRouteHelper, endpoint string, childEndpoints []string) {
 		router.GET(endpoint, func(ctx *gin.Context) {
 			ctx.String(http.StatusOK, join(childEndpoints))
@@ -91,11 +82,6 @@ func (f Frontend) Configure(router gin.IRouter) {
 	}
 
 	for _, r := range staticRoutes.Build() {
-		if strings.HasPrefix(r.Endpoint, "/meta-data/network") {
-			// Subtree under /meta-data/network is served dynamically by
-			// configureNetworkRoutes; skip to avoid double-registering.
-			continue
-		}
 		staticEndpointBinder(v20090404, r.Endpoint, r.Children)
 		if f.instanceEndpoint {
 			staticEndpointBinder(v20090404viaInstanceID, r.Endpoint, r.Children)
